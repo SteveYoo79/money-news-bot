@@ -1,0 +1,14 @@
+# 환경변수 (절대 업로드 금지)
+.env
+
+# node modules
+node_modules/
+
+# 로그 파일
+*.log
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+start-bot.bat
