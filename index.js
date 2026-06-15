@@ -34,37 +34,93 @@ const COMMON_HEADERS = {
 
 const FAST_SOURCES = [
   {
-    name: "연합뉴스 RSS",
+    name: "연합뉴스 경제",
     type: "rss",
     url: "https://www.yna.co.kr/rss/economy.xml"
+  },
+  {
+    name: "전자신문",
+    type: "etnews",
+    url: "https://www.etnews.com/news/section.html?id1=02"
+  },
+  {
+    name: "TheElec",
+    type: "thelec",
+    url: "https://www.thelec.kr/news/articleList.html?sc_section_code=S1N1&view_type=sm"
+  },
+  {
+    name: "TheBell",
+    type: "thebell",
+    url: "https://www.thebell.co.kr/free/content/Article.asp"
+  },
+  {
+    name: "한국경제 증권",
+    type: "rss",
+    url: "https://www.hankyung.com/feed/finance"
+  },
+  {
+    name: "매일경제 증권",
+    type: "rss",
+    url: "https://www.mk.co.kr/rss/50200011/"
   }
 ];
 
 const SLOW_SOURCES = [
   {
-    name: "머니투데이 증권",
-    type: "moneytoday",
-    url: "https://news.mt.co.kr/newsList.html?pDepth1=stock"
+    name: "한국경제 경제",
+    type: "rss",
+    url: "https://www.hankyung.com/feed/economy"
   },
   {
-    name: "이데일리 증권",
-    type: "edaily",
-    url: "https://www.edaily.co.kr/news/stock"
+    name: "한국경제 국제",
+    type: "rss",
+    url: "https://www.hankyung.com/feed/international"
   },
   {
-    name: "이데일리 경제",
-    type: "edaily",
-    url: "https://www.edaily.co.kr/news/economy"
+    name: "한국경제 IT",
+    type: "rss",
+    url: "https://www.hankyung.com/feed/it"
   },
   {
-    name: "네이버 경제",
-    type: "naver",
-    url: "https://news.naver.com/main/list.naver?mode=LSD&mid=sec&sid1=101"
+    name: "매일경제 경제",
+    type: "rss",
+    url: "https://www.mk.co.kr/rss/30100041/"
+  },
+  {
+    name: "매일경제 기업",
+    type: "rss",
+    url: "https://www.mk.co.kr/rss/40200124/"
+  },
+  {
+    name: "매일경제 종합",
+    type: "rss",
+    url: "https://www.mk.co.kr/rss/50000001/"
+  },
+  {
+    name: "아시아경제 증권",
+    type: "rss",
+    url: "http://view.asiae.co.kr/rss/stock.htm"
+  },
+  {
+    name: "아시아경제 경제",
+    type: "rss",
+    url: "http://view.asiae.co.kr/rss/economy.htm"
+  },
+  {
+    name: "아시아경제 산업",
+    type: "rss",
+    url: "http://view.asiae.co.kr/rss/industry-IT.htm"
+  },
+  {
+    name: "Investing 한국증시",
+    type: "rss",
+    url: "https://kr.investing.com/rss/news_25.rss"
   }
 ];
 
 const KEYWORD_SCORES = {
   세계최초: 10,
+  세계유일: 10,
   국내최초: 8,
   국내유일: 9,
   단독: 8,
@@ -184,6 +240,25 @@ function calculateNewsScore(title, matchedKeywords) {
   if (normalizedTitle.includes("단독")) score += 4;
 
   return score;
+}
+
+function isBadNewsTitle(title) {
+  const badKeywords = [
+    "전망",
+    "기대감",
+    "관심",
+    "주목",
+    "왜",
+    "이유는",
+    "알아보니",
+    "증시",
+    "마감",
+    "시황",
+    "코스피",
+    "코스닥"
+  ];
+
+  return badKeywords.some((keyword) => title.includes(keyword));
 }
 
 function getNewsGrade(score) {
@@ -499,11 +574,96 @@ async function fetchEdailyNews(source) {
   }
 }
 
+async function fetchGenericHtmlNews(source, baseUrl, linkIncludes) {
+  try {
+    const response = await axios.get(source.url, {
+      headers: COMMON_HEADERS,
+      timeout: 15000
+    });
+
+    const $ = cheerio.load(response.data);
+    const newsList = [];
+    const seenLinks = new Set();
+
+    $("a").each((_, element) => {
+      const title = $(element).text().replace(/\s+/g, " ").trim();
+      let link = $(element).attr("href");
+
+      if (!title || title.length < 10 || title.length > 120) return;
+      if (!link) return;
+
+      if (link.startsWith("/")) {
+        link = `${baseUrl}${link}`;
+      }
+
+      if (!link.includes(linkIncludes)) return;
+      if (seenLinks.has(link)) return;
+
+      seenLinks.add(link);
+
+      newsList.push({
+        source: source.name,
+        title,
+        link,
+        urgent: true
+      });
+    });
+
+    return newsList.slice(0, 30);
+  } catch (error) {
+    console.error(`❌ ${source.name} 수집 실패:`, error.message);
+    return [];
+  }
+}
+
+async function fetchEtnewsNews(source) {
+  console.log("전자신문 접속:", source.url);
+
+  const result = await fetchGenericHtmlNews(
+    source,
+    "https://www.etnews.com",
+    "etnews.com"
+  );
+
+  console.log(`전자신문 수집 결과: ${result.length}건`);
+
+  return result;
+}
+
+async function fetchTheElecNews(source) {
+  return fetchGenericHtmlNews(
+    source,
+    "https://www.thelec.kr",
+    "thelec.kr"
+  );
+}
+
+async function fetchTheBellNews(source) {
+  return fetchGenericHtmlNews(
+    source,
+    "https://www.thebell.co.kr",
+    "thebell.co.kr"
+  );
+}
+
+async function fetchDealSiteNews(source) {
+  return fetchGenericHtmlNews(
+    source,
+    "https://dealsite.co.kr",
+    "dealsite.co.kr"
+  );
+}
+
 async function fetchBySource(source) {
   if (source.type === "rss") return fetchRssNews(source);
   if (source.type === "naver") return fetchNaverNews(source);
   if (source.type === "moneytoday") return fetchMoneyTodayNews(source);
   if (source.type === "edaily") return fetchEdailyNews(source);
+
+  if (source.type === "etnews") return fetchEtnewsNews(source);
+  if (source.type === "thelec") return fetchTheElecNews(source);
+  if (source.type === "thebell") return fetchTheBellNews(source);
+
   return [];
 }
 
@@ -513,14 +673,16 @@ async function processNewsList(newsList, modeName) {
   for (const news of newsList) {
     if (!news.title || !news.link) continue;
     if (sentNews.has(news.link)) continue;
+    if (isBadNewsTitle(news.title)) continue;
 
     const matchedKeywords = containsMoneyKeyword(news.title);
     if (matchedKeywords.length === 0) continue;
 
     const score = calculateNewsScore(news.title, matchedKeywords);
+    if (score < 7) continue;
     const grade = getNewsGrade(score);
     const stockName = extractStockName(news.title);
-
+    
     const aiSummary = summarizeNewsFree(
       news.title,
       matchedKeywords,
